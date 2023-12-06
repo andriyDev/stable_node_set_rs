@@ -525,25 +525,59 @@ impl<T> NodeSet<T> {
   }
 }
 
+/// The result of looking for a value in the set.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum FoundHandle {
+  // The value is in the set, and its handle is returned.
+  Found(NodeHandle),
+  // The set is empty - the value is not in the set.
+  SetEmpty,
+  // The set does not contain the value and the handle of the value before it
+  // is provided. This is equivalent to `MissingWithNextHandle`. Both are
+  // provided so users can know which direction to search.
+  MissingWithPreviousHandle(NodeHandle),
+  // The set does not contain the value and the handle of the value after it
+  // is provided. This is equivalent to `MissingWithPreviousHandle`. Both are
+  // provided so users can know which direction to search.
+  MissingWithNextHandle(NodeHandle),
+}
+
 impl<T: PartialOrd + Ord> NodeSet<T> {
   /// Finds the slot in `node_handle`s subtree that `value` should be placed
-  /// in. Returns `None` if `value` is already in the set.
+  /// in. Returns `Ok` if `value` is not in the set, and `Err` if the value is
+  /// already in the set.
   fn find_slot(
     &self,
     node_handle: NodeHandle,
     value: &T,
-  ) -> Option<(NodeHandle, Direction)> {
+  ) -> Result<(NodeHandle, Direction), NodeHandle> {
     let node = self.nodes.get(node_handle.0).unwrap();
     match value.cmp(&node.value) {
-      std::cmp::Ordering::Equal => None,
+      std::cmp::Ordering::Equal => Err(node_handle),
       std::cmp::Ordering::Less => match node.left {
-        None => Some((node_handle, Direction::Left)),
+        None => Ok((node_handle, Direction::Left)),
         Some(left) => self.find_slot(left, value),
       },
       std::cmp::Ordering::Greater => match node.right {
-        None => Some((node_handle, Direction::Right)),
+        None => Ok((node_handle, Direction::Right)),
         Some(right) => self.find_slot(right, value),
       },
+    }
+  }
+
+  /// Looks for `value` in the set.
+  pub fn find_handle(&mut self, value: &T) -> FoundHandle {
+    let Some(root_node) = self.root_node else {
+      return FoundHandle::SetEmpty;
+    };
+    match self.find_slot(root_node, value) {
+      Err(node_handle) => FoundHandle::Found(node_handle),
+      Ok((node_handle, Direction::Left)) => {
+        FoundHandle::MissingWithNextHandle(node_handle)
+      }
+      Ok((node_handle, Direction::Right)) => {
+        FoundHandle::MissingWithPreviousHandle(node_handle)
+      }
     }
   }
 
@@ -557,7 +591,8 @@ impl<T: PartialOrd + Ord> NodeSet<T> {
         Some(new_handle)
       }
       Some(root_node) => {
-        let (parent, direction) = self.find_slot(root_node, &new_node.value)?;
+        let (parent, direction) =
+          self.find_slot(root_node, &new_node.value).ok()?;
 
         new_node.parent = Some(parent);
         let new_handle = NodeHandle(self.nodes.insert(new_node));
