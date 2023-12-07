@@ -48,7 +48,7 @@ impl<T> Node<T> {
 
 impl<T> Default for NodeSet<T> {
   fn default() -> Self {
-    Self { nodes: SlotMap::new(), root_node: None }
+    Self::new()
   }
 }
 
@@ -80,6 +80,10 @@ impl<'set, T> IntoIterator for &'set NodeSet<T> {
 }
 
 impl<T> NodeSet<T> {
+  pub fn new() -> Self {
+    Self { nodes: SlotMap::new(), root_node: None }
+  }
+
   pub fn len(&self) -> usize {
     self.nodes.len()
   }
