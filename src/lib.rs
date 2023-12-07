@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use slotmap::{DefaultKey, SlotMap};
 use std::fmt::Debug;
 
